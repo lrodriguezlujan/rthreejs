@@ -2,15 +2,16 @@ library("shiny")
 library("threejs")
 
 set.seed(1)
-if (!exists("example_data")) example_data <- matrix(runif(50 * 3), ncol = 3)
 
 shinyServer(function(input, output)
 {
   output$scatterplot <- renderScatterplotThree({
+    npoints <- input$npoints
     num.ticks <- input$nticks
+    example_data <- matrix(runif(npoints * 3), ncol = 3)
     if (num.ticks == 0) num.ticks <- NULL
     else num.ticks <- rep(num.ticks,3)
-    if (input$radius) r <- rlnorm(50,meanlog = -4, sdlog = 0.5)
+    if (input$radius) r <- rlnorm(npoints,meanlog = -4, sdlog = 0.15)
     else r <- 0
     data <- cbind(example_data,r)
     colnames(data) <- NULL

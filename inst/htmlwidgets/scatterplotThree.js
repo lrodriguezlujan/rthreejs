@@ -93,10 +93,14 @@ function scatter(el, x, obj)
   obj.scene = new THREE.Scene();
   var group = new THREE.Object3D();      // contains non-point plot elements
   var pointgroup = new THREE.Object3D(); // contains point elements
+  var spheregroup = new THREE.Object3D(); // contains point elements
   group.name = "group";
   pointgroup.name = "pointgroup";
+  pointgroup.renderOrder = 1;
+  spheregroup.name = "spheregroup";
   obj.scene.add( group );
   obj.scene.add( pointgroup );
+  obj.scene.add( spheregroup );
   obj.raycaster = new THREE.Raycaster();
   obj.raycaster.params.PointCloud.threshold = 0.05; // XXX Investigate these units...
   HOMER=obj;
@@ -115,68 +119,71 @@ function scatter(el, x, obj)
     }
     context.fill();
   };
-  // Compute number of points
-  var npoints = 0;
+  // Temporal sphere map
+  var sphereHashMap = {};
   // add the spheres ( not very efficient, but we're using JS and R so...efficiency is not our best )
   for ( var i = 0 ; i< x.data.length/4 ; i++) {
-    if(x.data[i*4 + 3] == 0) npoints = npoints + 1;
-    else {
+    if(x.data[i*4 + 3] > 0) {
+
       // Create geometry
-      var sphereGeo =  new THREE.SphereGeometry(x.data[i*4 + 3], 20, 20);
-      sphereGeo.computeFaceNormals();
+      var sphereGeo =  new THREE.SphereGeometry(x.data[i*4 + 3], x.options.wsegs, x.options.hsegs);
 
       // Move to position
       sphereGeo.applyMatrix ( new THREE.Matrix4().makeTranslation(x.data[i*4 ],x.data[i*4 + 1] , x.data[i*4 + 2]) );
       // Color
       if(x.options.color) {
-        if(Array.isArray(x.options.color)) col = new THREE.Color(x.options.color[i]);
-        else col = new THREE.Color(x.options.color);
+        if(Array.isArray(x.options.color)) col = x.options.color[i];
+        else col = x.options.color;
       }
-      else col = new THREE.Color("steelblue");
+      else col = "steelblue";
 
-      /** FIXME: Performance can be improved if the geometries are merged.
-       * http://learningthreejs.com/blog/2011/10/05/performance-merging-geometry/
-       */
-
-      // ADD
-      var mesh = new THREE.Mesh(
-        sphereGeo,
-        new THREE.MeshLambertMaterial( {color : col} ) );
-      mesh.index = i;
-      pointgroup.add( mesh );
+      // We already have other spheres of the same color
+      if ( typeof sphereHashMap[col] != "undefined") {
+        sphereHashMap[col].merge(sphereGeo);
+      }
+      else {
+        sphereHashMap[col] = sphereGeo;
+      }
     }
   }
+
+  // Geometries in the map to mesh
+  for ( var col in sphereHashMap ) {
+        sphereHashMap[col].computeFaceNormals();
+        sphereHashMap[col].computeBoundingSphere();
+        spheregroup.add( new THREE.Mesh(
+        sphereHashMap[col],
+        new THREE.MeshLambertMaterial( {color : new THREE.Color(col)} ) ) );
+  }
+
   // Add lights if npoints < data.length/4 (we have at least 1 sphere)
   /** Again, another possible improvement: three point lighting
    * http://learningthreejs.com/blog/2014/05/05/simple-and-efficient-3-point-lighting-to-get-your-game-started-with-threex-dot-basiclighting-game-extension-for-three-dot-js/
    */
-  if( npoints < x.data.length/4 ){
-    obj.scene.add(new THREE.HemisphereLight( new THREE.Color("#888888") ,new THREE.Color("#111111")));
-    var dl  = new THREE.DirectionalLight( 0xffffff , 0.7);
-    dl.position.set(0,1,1);
-    obj.scene.add(dl);
-  }
+
+  // Add lighting
+  obj.scene.add(new THREE.HemisphereLight( new THREE.Color("#888888") ,new THREE.Color("#111111")));
+  var dl  = new THREE.DirectionalLight( 0xffffff , 0.7);
+  dl.position.set(0,1,1);
+  obj.scene.add(dl);
 
   // add the points
-  if(npoints > 0) {
-    var j;
-    if(GL)
-    {
+  var npoints = x.data.length/4;
+  var j;
+  if(GL) {
       var geometry = new THREE.BufferGeometry();
       var positions = new Float32Array( npoints * 3 );
       var colors = new Float32Array( npoints * 3 );
       var col = new THREE.Color("steelblue");
       var scale = 0.07;
       if(x.options.size && !Array.isArray(x.options.size)) scale = 0.07 * x.options.size;
-      for ( var i = 0; i < x.data.length/4; i++ ) {
-        if(x.data[i*4 + 3] == 0){
+      for ( var i = 0; i < npoints; i++ ) {
           // smthing like Memcpy? slice?
-          positions[i * 4 ] = x.data[i * 4];
-          positions[i * 4 + 1 ] = x.data[i * 4 + 1];
-          positions[i * 4 + 2 ] = x.data[i * 4 + 2];
-        }
+          positions[i * 3 ] = x.data[i * 4];
+          positions[i * 3 + 1 ] = x.data[i * 4 + 1];
+          positions[i * 3 + 2 ] = x.data[i * 4 + 2];
       }
-      for(var i=0; i < x.data.length/4; i++) {
+      for(var i=0; i < npoints; i++) {
         if(x.options.color) {
           if(Array.isArray(x.options.color)) col = new THREE.Color(x.options.color[i]);
           else col = new THREE.Color(x.options.color);
@@ -190,12 +197,13 @@ function scatter(el, x, obj)
       geometry.computeBoundingSphere();
       var pcmaterial = new THREE.PointCloudMaterial( { size: scale, vertexColors: THREE.VertexColors } );
       var particleSystem = new THREE.PointCloud( geometry, pcmaterial );
+      particleSystem.renderOrder = 1;
       pointgroup.add( particleSystem );
     }
     else {
       var col = new THREE.Color("steelblue");
       var scale = 0.03;
-      for ( var i = 0; i < x.data.length/4; i++ ) {
+      for ( var i = 0; i < npoints; i++ ) {
         if(x.options.color) {
           if(Array.isArray(x.options.color)) col = new THREE.Color(x.options.color[i]);
           else col = new THREE.Color(x.options.color);
@@ -220,7 +228,6 @@ function scatter(el, x, obj)
         pointgroup.add( particle );
       }
     }
-  }
 
 // helper function to add text to object
   function addText(object, string, scale, x, y, z, color)
@@ -367,6 +374,7 @@ function scatter(el, x, obj)
       var dy = ev.clientY - sy;
       group.rotation.y += dx*0.01;
       pointgroup.rotation.y += dx*0.01;
+      spheregroup.rotation.y += dx*0.01;
       obj.camera.position.y += 0.05*dy;
       if(obj.camera.position.y < -8) obj.camera.position.y = -8;
       if(obj.camera.position.y > 8) obj.camera.position.y = 8;
@@ -396,7 +404,7 @@ function scatter(el, x, obj)
             if(typeof intersects[0].index !== 'undefined' )
               label = x.options.labels[intersects[0].index];
             else
-              label = x.options.labels[intersects[0].object.index];
+              label = "";
           }
           else label = x.options.labels;
         }

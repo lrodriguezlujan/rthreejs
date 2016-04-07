@@ -49,6 +49,7 @@
 #' @param signif Number of significant digits used to represent point
 #' coordinates. Larger numbers increase accuracy but slow plot generation
 #' down.
+#' @param segs Number of segments used to draw a sphere.
 #' @param bg  The color to be used for the background of the device region.
 #' @param xlim Optional two-element vector of x-axis limits. Default auto-scales to data.
 #' @param ylim Optional two-element vector of y-axis limits. Default auto-scales to data.
@@ -165,6 +166,7 @@ scatterplot3js <- function(
   renderer = c("auto","canvas","webgl"),
   signif = 8,
   bg = "#ffffff",
+  segs = 10,
   xlim, ylim, zlim, pch, ...) {
   # validate input
   if (!missing(y) && !missing(z)) {
@@ -248,7 +250,7 @@ scatterplot3js <- function(
   # be transformed into a ellipsoid. (¿FIXME?)
   x[,4] <- x[,4]/(max(mx - mn))
 
-  if (flip.y) x[,3] = 1 - x[,3]
+  if (flip.y) x[,3] <- 1 - x[,3]
 
   mdata = x # stash for return result
 
@@ -291,6 +293,10 @@ scatterplot3js <- function(
     options$ytick = p2
     options$ztick = p3
   }
+
+  # Sphere options
+  options$hsegs <- segs
+  options$wsegs <- segs
 
   # create widget
   ans = htmlwidgets::createWidget(
