@@ -190,7 +190,7 @@ HTMLWidgets.widget(
         for (j = 0; j<point.geometry.faces.length; j++) {
           point.geometry.faces[j].color = new THREE.Color(colr);
         }
-        THREE.GeometryUtils.merge(group,point);
+        group.merge(point);
       }
     }
     var points = new THREE.Mesh(group, bm);
