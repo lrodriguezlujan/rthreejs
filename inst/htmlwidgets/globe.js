@@ -57,7 +57,7 @@ HTMLWidgets.widget(
 // weirdness of call-by-sharing, we can modify that state.
   renderValue: function(el, x, stuff)
   {
-    var img, geometry, tex, earth;
+    var img, geometry, tex, earth, material;
     var down = false;
     var sx = 0, sy = 0;
 
@@ -68,7 +68,7 @@ HTMLWidgets.widget(
     'varying float intensity;',
     'void main(){',
     'vec3 vNormal = normalize( normalMatrix * normal );',
-    'vec3 vNormel = normalize( normalMatrix * viewVector );', 
+    'vec3 vNormel = normalize( normalMatrix * viewVector );',
     'intensity = pow( c - dot(vNormal, vNormel), p );',
     'gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );}'].join('\n');
 
@@ -81,7 +81,7 @@ HTMLWidgets.widget(
 
 // check for manual override of the detector
     if(!(x.renderer==null))
-    { 
+    {
       if(x.renderer=="canvas" && GL==true)
       {
         stuff.renderer = new THREE.CanvasRenderer();
@@ -106,22 +106,39 @@ HTMLWidgets.widget(
 
     if(x.bg) stuff.renderer.setClearColor(x.bg);
 
+    tex = new THREE.Texture();
+    material = new THREE.MeshLambertMaterial({
+      map: tex,
+      color: x.bodycolor});
+    // Emissive chages: r70 to r71
+    material.emissive = new THREE.Color(x.emissive);
+    material.emissiveIntensity = 0.01;
+    material.needsUpdate = true;
+
     stuff.scene = new THREE.Scene();
     geometry = new THREE.SphereGeometry(x.diameter, x.segments, x.segments);
 
     if(x.dataURI)
     {
       img = document.createElement("img");
+      img.onload = function() {
+        tex.image = img;
+        tex.needsUpdate = true;
+        // Force update
+        render()
+      }
       img.src = x.img;
-      tex = new THREE.Texture();
-      tex.image = img;
-      tex.needsUpdate = true;
     } else
     {
-      tex = THREE.ImageUtils.loadTexture(x.img);
+      var loader = new THREE.TextureLoader();
+      loader.load(x.img, function(tex){
+        material.map = tex;
+        tex.needsUpdate = true;
+        // Force update
+        render()
+      });
     }
 
-    var material = new THREE.MeshLambertMaterial({map: tex, color: x.bodycolor, emissive: x.emissive});
 
     earth = new THREE.Mesh( geometry, material );
     earth.position.x = earth.position.y = 0;
@@ -133,10 +150,10 @@ HTMLWidgets.widget(
     stuff.camera.position.z = 800*Math.cos(earth.rotation.x) * Math.cos(earth.rotation.y);
     stuff.camera.lookAt(stuff.scene.position);
 
-    var customMaterial = new THREE.ShaderMaterial( 
+    var customMaterial = new THREE.ShaderMaterial(
     {
-      uniforms: 
-      { 
+      uniforms:
+      {
         "c":   { type: "f", value: 1.3 },
         "p":   { type: "f", value: 9.0 },
         glowColor: { type: "c", value: new THREE.Color(0xeeeeff) },
@@ -161,9 +178,6 @@ HTMLWidgets.widget(
     if(x.lat != null)
     {
       var phi, theta, lat, lng, colr, size;
-      var bg = new THREE.BoxGeometry(1,1,1);
-      var bm = new THREE.MeshBasicMaterial({color: 0xffffff, vertexColors: THREE.FaceColors});
-      var point;
 
       for (var i = 0; i < x.lat.length; ++i)
       {
@@ -179,21 +193,32 @@ HTMLWidgets.widget(
           size = parseInt(x.value);
         phi = (90 - lat) * Math.PI / 180;
         theta = - lng * Math.PI / 180;
-        var point = new THREE.Mesh(bg, bm);
-        point.position.x = x.diameter * Math.sin(phi) * Math.cos(theta);
-        point.position.y = x.diameter * Math.cos(phi);
-        point.position.z = x.diameter * Math.sin(phi) * Math.sin(theta);
-        point.scale.x = point.scale.y = x.pointsize;
-        point.scale.z = size;
-        point.lookAt(earth.position);
+        var aux = new THREE.Object3D();
+        // Set position
+        aux.position.x = x.diameter * Math.sin(phi) * Math.cos(theta);
+        aux.position.y = x.diameter * Math.cos(phi);
+        aux.position.z = x.diameter * Math.sin(phi) * Math.sin(theta);
+        // Set scale
+        aux.scale.x = aux.scale.y = x.pointsize;
+        aux.scale.z = Math.max(size,1E-5); // Avoid scale 0 -> non invertible matrix -> ThreeJS warning
+        // Lookat
+        aux.lookAt(earth.position);
+        // Update matrix
+        aux.updateMatrix();
+
+        // Apply to geometry
+        var point = new THREE.BoxGeometry(1,1,1);
+        point.applyMatrix(aux.matrix);
+
         var j;
-        for (j = 0; j<point.geometry.faces.length; j++) {
-          point.geometry.faces[j].color = new THREE.Color(colr);
+        for (j = 0; j<point.faces.length; j++) {
+          point.faces[j].color = new THREE.Color(colr);
         }
         group.merge(point);
+        //THREE.GeometryUtils.merge(group,point);
       }
     }
-    var points = new THREE.Mesh(group, bm);
+    var points = new THREE.Mesh(group, new THREE.MeshBasicMaterial({color: 0xffffff, vertexColors: THREE.FaceColors}));
     stuff.scene.add(points);
 
 // Add the arcs
