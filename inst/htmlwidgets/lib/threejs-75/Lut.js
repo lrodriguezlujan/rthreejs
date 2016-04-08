@@ -210,9 +210,6 @@ THREE.Lut.prototype = {
 		}
 
 		this.legend.mesh.position.copy( this.legend.position );
-		
-		// Update bounding box (to position ticks, lines and text)
-		this.legend.mesh.geometry.computeBoundingBox();
 
 		return this.legend.mesh;
 
@@ -259,8 +256,6 @@ THREE.Lut.prototype = {
 			this.legend.mesh.rotation.z = - 90 * ( Math.PI / 180 );
 
 		}
-		
-		this.legend.mesh.geometry.computeBoundingBox();
 
 		return this.legend.mesh;
 
@@ -269,8 +264,7 @@ THREE.Lut.prototype = {
 	setLegendPosition: function ( position ) {
 
 		this.legend.position = new THREE.Vector3( position.x, position.y, position.z );
-    this.legend.mesh.geometry.computeBoundingBox();
-    
+
 		return this.legend;
 
 	},
@@ -310,16 +304,10 @@ THREE.Lut.prototype = {
 		this.legend.labels.decimal = parameters.hasOwnProperty( 'decimal' ) ? parameters[ 'decimal' ] : 2;
 
 		this.legend.labels.notation = parameters.hasOwnProperty( 'notation' ) ? parameters[ 'notation' ] : 'standard';
-		
-		// Color params
-		this.legend.labels.titleColor = parameters.hasOwnProperty( 'titleColor' ) ? new THREE.Color(parameters.titleColor) : new THREE.Color('white');
-		this.legend.labels.tickColor = parameters.hasOwnProperty( 'tickColor' ) ? new THREE.Color(parameters.tickColor) : new THREE.Color('white');
-		this.legend.labels.labelColor = parameters.hasOwnProperty( 'labelColor' ) ? new THREE.Color(parameters.labelColor) : new THREE.Color('white');
 
 		var backgroundColor = { r: 255, g: 100, b: 100, a: 0.8 };
-		var borderColor =  { r: 0, g: 0, b: 0, a: 1.0 };
+		var borderColor =  { r: 255, g: 0, b: 0, a: 1.0 };
 		var borderThickness = 4;
-		var legendBBox = this.legend.mesh.geometry.boundingBox;
 
 		var canvasTitle = document.createElement( 'canvas' );
 		var contextTitle = canvasTitle.getContext( '2d' );
@@ -335,7 +323,7 @@ THREE.Lut.prototype = {
 
 		contextTitle.lineWidth = borderThickness;
 
-		contextTitle.fillStyle = this.legend.labels.titleColor.getStyle() ;
+		contextTitle.fillStyle = 'rgba( 0, 0, 0, 1.0 )';
 
 		contextTitle.fillText( this.legend.labels.title.toString() + this.legend.labels.um.toString(), borderThickness, this.legend.labels.fontsize + borderThickness );
 
@@ -350,10 +338,8 @@ THREE.Lut.prototype = {
 
 		if ( this.legend.layout == 'vertical' ) {
 
-      
-			spriteTitle.position.set( 
-			  this.legend.position.x + this.legend.dimensions.width, this.legend.position.y + ( this.legend.dimensions.height * 0.45 ), this.legend.position.z );
-			  
+			spriteTitle.position.set( this.legend.position.x + this.legend.dimensions.width, this.legend.position.y + ( this.legend.dimensions.height * 0.45 ), this.legend.position.z );
+
 		}
 
 		if ( this.legend.layout == 'horizontal' ) {
@@ -383,8 +369,7 @@ THREE.Lut.prototype = {
 
 			for ( var i = 0; i < this.legend.labels.ticks; i ++ ) {
 
-				var value = ( this.maxV - this.minV ) / ( this.legend.labels.ticks - 1  ) * i ;
-				var realValue = this.minV + value;
+				var value = ( this.maxV - this.minV ) / ( this.legend.labels.ticks - 1  ) * i + this.minV;
 
 				if ( callback ) {
 
@@ -394,11 +379,11 @@ THREE.Lut.prototype = {
 
 					if ( this.legend.labels.notation == 'scientific' ) {
 
-						realValue = realValue.toExponential( this.legend.labels.decimal );
+						value = value.toExponential( this.legend.labels.decimal );
 
 					} else {
 
-						realValue = realValue.toFixed( this.legend.labels.decimal );
+						value = value.toFixed( this.legend.labels.decimal );
 
 					}
 
@@ -418,9 +403,9 @@ THREE.Lut.prototype = {
 
 				contextTick.lineWidth = borderThickness;
 
-				contextTick.fillStyle = this.legend.labels.labelColor.getStyle();
+				contextTick.fillStyle = 'rgba( 0, 0, 0, 1.0 )';
 
-				contextTick.fillText( realValue.toString(), borderThickness, this.legend.labels.fontsize + borderThickness );
+				contextTick.fillText( value.toString(), borderThickness, this.legend.labels.fontsize + borderThickness );
 
 				var txtTick = new THREE.CanvasTexture( canvasTick );
 				txtTick.minFilter = THREE.LinearFilter;
@@ -433,7 +418,7 @@ THREE.Lut.prototype = {
 
 				if ( this.legend.layout == 'vertical' ) {
 
-					var position = bottomPositionY + ( topPositionY - bottomPositionY ) * ( value / ( this.maxV - this.minV ) );
+					var position = bottomPositionY + ( topPositionY - bottomPositionY ) * ( ( value - this.minV ) / ( this.maxV - this.minV ) );
 
 					spriteTick.position.set( this.legend.position.x + ( this.legend.dimensions.width * 2.7 ), position, this.legend.position.z );
 
@@ -441,7 +426,7 @@ THREE.Lut.prototype = {
 
 				if ( this.legend.layout == 'horizontal' ) {
 
-					var position = bottomPositionX + ( topPositionX - bottomPositionX ) * ( value / ( this.maxV - this.minV ) );
+					var position = bottomPositionX + ( topPositionX - bottomPositionX ) * ( ( value - this.minV ) / ( this.maxV - this.minV ) );
 
 					if ( this.legend.labels.ticks > 5 ) {
 
@@ -465,14 +450,14 @@ THREE.Lut.prototype = {
 
 				}
 
-				var material = new THREE.LineBasicMaterial( { color: this.legend.labels.tickColor, linewidth: 2 } );
+				var material = new THREE.LineBasicMaterial( { color: 0x000000, linewidth: 2 } );
 
 				var geometry = new THREE.Geometry();
 
 
 				if ( this.legend.layout == 'vertical' ) {
 
-					var linePosition = ( this.legend.position.y - ( this.legend.dimensions.height * 0.5 ) + 0.01 ) + ( this.legend.dimensions.height ) * ( value / ( this.maxV - this.minV ) * 0.99 );
+					var linePosition = ( this.legend.position.y - ( this.legend.dimensions.height * 0.5 ) + 0.01 ) + ( this.legend.dimensions.height ) * ( ( value - this.minV ) / ( this.maxV - this.minV ) * 0.99 );
 
 					geometry.vertices.push( new THREE.Vector3( this.legend.position.x + this.legend.dimensions.width * 0.55, linePosition, this.legend.position.z  ) );
 
@@ -482,7 +467,7 @@ THREE.Lut.prototype = {
 
 				if ( this.legend.layout == 'horizontal' ) {
 
-					var linePosition = ( this.legend.position.x - ( this.legend.dimensions.height * 0.5 ) + 0.01 ) + ( this.legend.dimensions.height ) * ( value / ( this.maxV - this.minV ) * 0.99 );
+					var linePosition = ( this.legend.position.x - ( this.legend.dimensions.height * 0.5 ) + 0.01 ) + ( this.legend.dimensions.height ) * ( ( value - this.minV ) / ( this.maxV - this.minV ) * 0.99 );
 
 					geometry.vertices.push( new THREE.Vector3( linePosition, this.legend.position.y - this.legend.dimensions.width * 0.55, this.legend.position.z  ) );
 
