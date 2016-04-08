@@ -121,10 +121,14 @@ function scatter(el, x, obj)
   };
   // Temporal sphere map
   var sphereHashMap = {};
+  var npoints = x.data.length/4;
+  var nspheres = 0;
+
   // add the spheres ( not very efficient, but we're using JS and R so...efficiency is not our best )
-  for ( var i = 0 ; i< x.data.length/4 ; i++) {
+  for ( var i = 0 ; i< npoints ; i++) {
     if(x.data[i*4 + 3] > 0) {
 
+      nspheres = nspheres + 1;
       // Create geometry
       var sphereGeo =  new THREE.SphereGeometry(x.data[i*4 + 3], x.options.wsegs, x.options.hsegs);
 
@@ -156,6 +160,38 @@ function scatter(el, x, obj)
         new THREE.MeshLambertMaterial( {color : new THREE.Color(col)} ) ) );
   }
 
+  // Now, create empty points as targets for the raycasting (same color spheres are now the SAME object)
+  // To Avoid the point to be plotted over the sphere (hello THREEJS magic ) we need to make them invisible
+  // ONLY for GL...
+  if( nspheres > 0 && GL ){
+      var geometry = new THREE.BufferGeometry();
+      var positions   = new Float32Array( nspheres * 3 );
+      var labelIndex  = new Float32Array( nspheres );
+      var j = 0;
+      // For every sphere...
+      for ( var i = 0; i < npoints; i++ ) {
+          if(x.data[i * 4 + 3 ] > 0){
+            // smthing like Memcpy? slice?
+            positions[j * 3 ] = x.data[i * 4];
+            positions[j * 3 + 1 ] = x.data[i * 4 + 1];
+            positions[j * 3 + 2 ] = x.data[i * 4 + 2];
+            labelIndex[j] = i ;
+            j = j + 1;
+
+          }
+      }
+
+      // Create!
+      geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+      geometry.addAttribute( 'labelIndex', new THREE.BufferAttribute( labelIndex, 1 ) );
+      geometry.computeBoundingSphere();
+      var pcmaterial = new THREE.PointsMaterial( { size: 0, vertexColors: THREE.VertexColors } );
+      pcmaterial.visible = false; // Invisible
+      var particleSystem = new THREE.Points( geometry, pcmaterial );
+      particleSystem.name = "invisiblePoints";
+      pointgroup.add( particleSystem );
+  }
+
   // Add lights if npoints < data.length/4 (we have at least 1 sphere)
   /** Again, another possible improvement: three point lighting
    * http://learningthreejs.com/blog/2014/05/05/simple-and-efficient-3-point-lighting-to-get-your-game-started-with-threex-dot-basiclighting-game-extension-for-three-dot-js/
@@ -168,37 +204,55 @@ function scatter(el, x, obj)
   obj.scene.add(dl);
 
   // add the points
-  var npoints = x.data.length/4;
-  var j;
+
+
   if(GL) {
-      var geometry = new THREE.BufferGeometry();
-      var positions = new Float32Array( npoints * 3 );
-      var colors = new Float32Array( npoints * 3 );
-      var col = new THREE.Color("steelblue");
-      var scale = 0.07;
-      if(x.options.size && !Array.isArray(x.options.size)) scale = 0.07 * x.options.size;
-      for ( var i = 0; i < npoints; i++ ) {
-          // smthing like Memcpy? slice?
-          positions[i * 3 ] = x.data[i * 4];
-          positions[i * 3 + 1 ] = x.data[i * 4 + 1];
-          positions[i * 3 + 2 ] = x.data[i * 4 + 2];
-      }
-      for(var i=0; i < npoints; i++) {
-        if(x.options.color) {
-          if(Array.isArray(x.options.color)) col = new THREE.Color(x.options.color[i]);
-          else col = new THREE.Color(x.options.color);
+    // Only if there is something to plot (avoid empty mesh warning)
+      if(nspheres < npoints){
+        var geometry = new THREE.BufferGeometry();
+        var positions = new Float32Array( (npoints-nspheres) * 3 );
+        var colors = new Float32Array( (npoints-nspheres) * 3 );
+        var labelIndex  = new Float32Array( (npoints-nspheres) );
+        var col = new THREE.Color("steelblue");
+        var scale = 0.07;
+        var j = 0;
+        if(x.options.size && !Array.isArray(x.options.size)) scale = 0.07 * x.options.size;
+        for ( var i = 0; i < npoints; i++ ) {
+            if( x.data[i*4 + 3 ]  === 0){
+
+              // Color
+              if(x.options.color) {
+                if(Array.isArray(x.options.color)) col = new THREE.Color(x.options.color[i]);
+                else col = new THREE.Color(x.options.color);
+              }
+
+              // smthing like Memcpy? slice?
+              positions[j * 3 ] = x.data[i * 4];
+              positions[j * 3 + 1 ] = x.data[i * 4 + 1];
+              positions[j * 3 + 2 ] = x.data[i * 4 + 2];
+
+              // Set color
+              colors[j * 3] = col.r;
+              colors[j * 3 + 1] = col.g;
+              colors[j * 3 + 2] = col.b;
+
+              // Label index
+              labelIndex[j] = i ;
+
+              j = j + 1;
+            }
+
         }
-        colors[i * 3] = col.r;
-        colors[i * 3 + 1] = col.g;
-        colors[i * 3 + 2] = col.b;
+
+        geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+        geometry.addAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
+        geometry.addAttribute( 'labelIndex', new THREE.BufferAttribute( labelIndex, 1 ) );
+        geometry.computeBoundingSphere();
+        var pcmaterial = new THREE.PointsMaterial( { size: scale, vertexColors: THREE.VertexColors } );
+        var particleSystem = new THREE.Points( geometry, pcmaterial );
+        particleSystem.name = "visiblePoints";
+        pointgroup.add( particleSystem );
       }
-      geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
-      geometry.addAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
-      geometry.computeBoundingSphere();
-      var pcmaterial = new THREE.PointsMaterial( { size: scale, vertexColors: THREE.VertexColors } );
-      var particleSystem = new THREE.Points( geometry, pcmaterial );
-      particleSystem.renderOrder = 1;
-      pointgroup.add( particleSystem );
     }
     else {
       var col = new THREE.Color("steelblue");
@@ -212,13 +266,18 @@ function scatter(el, x, obj)
           if(Array.isArray(x.options.size)) scale = 0.03 * x.options.size[i];
           else scale = 0.03 * x.options.size;
         }
-        var material = new THREE.SpriteCanvasMaterial( {
-            color: col, program: program , opacity:0.9} );
+        var material = new THREE.SpriteCanvasMaterial( { color: col, program: program , opacity:0.9} );
         var particle = new THREE.Sprite( material );
         particle.position.x = x.data[i * 4];
         particle.position.y = x.data[i* 4 + 1];
         particle.position.z = x.data[i * 4 + 2];
-        particle.scale.x = particle.scale.y = scale;
+        if( x.data[i * 4 + 3] > 0 ){
+          material.opacity = 0.001;
+          particle.scale.x = particle.scale.y =  x.data[i * 4 + 3];
+        }
+        else
+          particle.scale.x = particle.scale.y = scale;
+
         // Label points.
         if(x.options.labels)
         {
@@ -411,10 +470,10 @@ function scatter(el, x, obj)
         if(x.options.labels)
         {
           if(Array.isArray(x.options.labels)){
-            if(typeof intersects[0].index !== 'undefined' )
-              label = x.options.labels[intersects[0].index];
+            if(typeof intersects[0].labelIndex !== 'undefined' )
+              label = x.options.labels[intersects[0].labelIndex];
             else
-              label = "";
+              label = x.options.labels[intersects[0].index];
           }
           else label = x.options.labels;
         }
