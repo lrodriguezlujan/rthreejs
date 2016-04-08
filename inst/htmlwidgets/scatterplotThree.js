@@ -102,7 +102,7 @@ function scatter(el, x, obj)
   obj.scene.add( pointgroup );
   obj.scene.add( spheregroup );
   obj.raycaster = new THREE.Raycaster();
-  obj.raycaster.params.PointCloud.threshold = 0.05; // XXX Investigate these units...
+  obj.raycaster.params.Points.threshold = 0.05; // XXX Investigate these units...
   HOMER=obj;
 
 
@@ -195,8 +195,8 @@ function scatter(el, x, obj)
       geometry.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
       geometry.addAttribute( 'color', new THREE.BufferAttribute( colors, 3 ) );
       geometry.computeBoundingSphere();
-      var pcmaterial = new THREE.PointCloudMaterial( { size: scale, vertexColors: THREE.VertexColors } );
-      var particleSystem = new THREE.PointCloud( geometry, pcmaterial );
+      var pcmaterial = new THREE.PointsMaterial( { size: scale, vertexColors: THREE.VertexColors } );
+      var particleSystem = new THREE.Points( geometry, pcmaterial );
       particleSystem.renderOrder = 1;
       pointgroup.add( particleSystem );
     }
@@ -243,10 +243,20 @@ function scatter(el, x, obj)
     context.fillText(string, size / 2, size / 2);
     var amap = new THREE.Texture(canvas);
     amap.needsUpdate = true;
+    /****
+     *  Important note: http://stackoverflow.com/questions/20601102/three-spritealignment-showing-up-as-undefined
+     *
+     *  SpriteMaterial.alignment and SpriteMaterial.useScreenCoordinates have been removed from Threejs.
+     *
+     *  If you want to create a heads-up display (HUD), the work-around is to overlay a second scene of sprites,
+     *  rendered with an orthographic camera.
+     *
+     *  See http://threejs.org/examples/webgl_sprites.html for an example of how to do that.
+     */
     var mat = new THREE.SpriteMaterial({
       map: amap,
       transparent: true,
-      useScreenCoordinates: false,
+      // useScreenCoordinates: false,
       color: 0xffffff });
     sp = new THREE.Sprite(mat);
     sp.scale.set( scale, scale, scale );
