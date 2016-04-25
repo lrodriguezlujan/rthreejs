@@ -109,13 +109,17 @@ HTMLWidgets.widget(
     tex = new THREE.Texture();
     material = new THREE.MeshLambertMaterial({
       map: tex,
+      emissive: x.emissive,
+      emissiveMap: tex,
       color: x.bodycolor});
     // Emissive chages: r70 to r71
-    material.emissive = new THREE.Color(x.emissive);
-    material.emissiveIntensity = 0.01;
     material.needsUpdate = true;
 
     stuff.scene = new THREE.Scene();
+    
+    // Ambient light
+    stuff.scene.add( new THREE.AmbientLight( x.lightcolor ) );
+    
     geometry = new THREE.SphereGeometry(x.diameter, x.segments, x.segments);
 
     if(x.dataURI)
@@ -125,17 +129,18 @@ HTMLWidgets.widget(
         tex.image = img;
         tex.needsUpdate = true;
         // Force update
-        render()
-      }
+        render();
+      };
       img.src = x.img;
     } else
     {
       var loader = new THREE.TextureLoader();
       loader.load(x.img, function(tex){
         material.map = tex;
+        material.emissiveMap = tex;
         tex.needsUpdate = true;
         // Force update
-        render()
+        render();
       });
     }
 
@@ -170,8 +175,6 @@ HTMLWidgets.widget(
     atmo.scale.multiplyScalar(1.01);
     if(GL && x.atmosphere) stuff.scene.add(atmo);
 
-    stuff.scene.add( new THREE.AmbientLight( x.lightcolor ) );
-    stuff.scene.add( new THREE.AmbientLight( x.lightcolor ) );
 
 // Add the data points
     var group = new THREE.Geometry();
